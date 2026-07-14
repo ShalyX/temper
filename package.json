@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "vercel-build": "node -e \"console.log('vercel-build: static+api only')\"",
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "tsx src/server/index.ts",
@@ -16,7 +17,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
