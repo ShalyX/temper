@@ -74,6 +74,7 @@ export async function runDualScenario(
   });
 
   const registryEntries: RegistryEntry[] = [];
+  const registryMode = input.mode?.registry ?? "memory";
   for (const result of [naive, guarded]) {
     const entry = await input.registry.record({
       scenarioId: input.scenarioId,
@@ -82,7 +83,7 @@ export async function runDualScenario(
       failureKind: result.failureKind,
       traceHash: hashTrace(result),
       txHash: result.txHash,
-      mode: "memory",
+      mode: registryMode,
       deployHash: result.txHash,
     });
     registryEntries.push(entry);

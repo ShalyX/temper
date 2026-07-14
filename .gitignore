@@ -3,6 +3,7 @@ dist/
 .env
 .env.local
 *.pem
+keys/
 .DS_Store
 coverage/
 .temper/

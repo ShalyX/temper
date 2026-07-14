@@ -7,12 +7,42 @@ export type CasperLiveConfig = {
   networkName: string;
   secretKeyPath: string;
   keyAlgo: "ed25519" | "secp256k1";
-  /** Optional fixed recipient; defaults to self-transfer */
   recipientPublicKeyHex?: string;
-  /** Transfer amount in motes (string). Default 2_500_000_000 (2.5 CSPR) */
   transferAmountMotes?: string;
   paymentAmountMotes?: string;
 };
+
+async function loadCasperSdk(): Promise<any> {
+  const mod: any = await import("casper-js-sdk");
+  return mod.default ?? mod;
+}
+
+function bytesToHex(bytes: Uint8Array | number[] | undefined): string | undefined {
+  if (!bytes) return undefined;
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function extractTxHash(tx: any, putResult?: any): string {
+  const fromPut =
+    putResult?.transactionHash?.transactionV1 ??
+    putResult?.transactionHash?.deploy ??
+    putResult?.transactionHash?.toHex?.() ??
+    putResult?.transaction_hash?.Version1 ??
+    putResult?.transaction_hash?.Deploy ??
+    putResult?.hash;
+  if (fromPut) return String(fromPut);
+
+  const hashObj = tx?.hash;
+  const hex =
+    hashObj?.toHex?.() ??
+    bytesToHex(hashObj?.hashBytes) ??
+    bytesToHex(hashObj?.transactionV1?.hashBytes) ??
+    bytesToHex(tx?.originTransactionV1?.hash?.hashBytes);
+  if (hex) return hex.startsWith("0x") ? hex.slice(2) : hex;
+  throw new Error("Unable to extract Casper transaction hash");
+}
 
 export function loadCasperConfigFromEnv(
   env: NodeJS.ProcessEnv = process.env,
@@ -33,11 +63,6 @@ export function loadCasperConfigFromEnv(
   };
 }
 
-async function loadCasperSdk(): Promise<any> {
-  const mod: any = await import("casper-js-sdk");
-  return mod.default ?? mod;
-}
-
 export async function proveCasperRpc(
   rpcUrl = process.env.CASPER_RPC_URL ??
     "https://node.testnet.casper.network/rpc",
@@ -48,19 +73,32 @@ export async function proveCasperRpc(
   const status = await client.getStatus();
   return {
     chainSpecName: status.chainSpecName ?? status.chainspec_name ?? "unknown",
-    protocolVersion: status.protocolVersion ?? status.protocol_version ?? "unknown",
+    protocolVersion:
+      status.protocolVersion ?? status.protocol_version ?? "unknown",
   };
 }
 
-/**
- * Returns a function that submits a real CSPR transfer on Casper Testnet
- * using casper-js-sdk v5 (TransactionV1 / putTransaction).
- */
-export async function createLiveCasperAnchor(
+export async function getPublicKeyHexFromConfig(
   config: CasperLiveConfig,
-): Promise<() => Promise<AnchorResult>> {
+): Promise<string> {
   const sdk = await loadCasperSdk();
+  const pem = readFileSync(config.secretKeyPath, "utf8");
+  const algo =
+    config.keyAlgo === "secp256k1"
+      ? sdk.KeyAlgorithm.SECP256K1
+      : sdk.KeyAlgorithm.ED25519;
+  const privateKey = await sdk.PrivateKey.fromPem(pem, algo);
+  return privateKey.publicKey.toHex();
+}
 
+/**
+ * Submit a real CSPR transfer on Casper Testnet.
+ * Requires a funded account (faucet: https://testnet.cspr.live/tools/faucet).
+ */
+export async function submitLiveTransfer(
+  config: CasperLiveConfig,
+): Promise<AnchorResult> {
+  const sdk = await loadCasperSdk();
   const pem = readFileSync(config.secretKeyPath, "utf8");
   const algo =
     config.keyAlgo === "secp256k1"
@@ -68,78 +106,52 @@ export async function createLiveCasperAnchor(
       : sdk.KeyAlgorithm.ED25519;
 
   const privateKey = await sdk.PrivateKey.fromPem(pem, algo);
-  const senderHex: string =
-    privateKey.publicKey?.toHex?.() ??
-    privateKey.publicKey?.toAccountHex?.() ??
-    String(privateKey.publicKey);
-
+  const senderHex: string = privateKey.publicKey.toHex();
   const recipientHex = config.recipientPublicKeyHex ?? senderHex;
   const amount = config.transferAmountMotes ?? "2500000000";
   const payment = config.paymentAmountMotes ?? "100000000";
 
   const handler = new sdk.HttpHandler(config.rpcUrl);
   const client = new sdk.RpcClient(handler);
+  const status = await client.getStatus();
+  const apiVersion: string =
+    status.apiVersion ?? status.api_version ?? "2.0.0";
 
-  // Connectivity check once at factory time
-  await client.getStatus();
+  const transaction = sdk.makeCsprTransferTransaction({
+    senderPublicKeyHex: senderHex.replace(/^0x/, ""),
+    recipientPublicKeyHex: recipientHex.replace(/^0x/, ""),
+    transferAmount: amount,
+    chainName: config.networkName,
+    casperNetworkApiVersion: apiVersion,
+    paymentAmount: payment,
+    memo: Date.now() % 1_000_000_000,
+  });
 
-  return async () => {
-    const status = await client.getStatus();
-    const apiVersion: string =
-      status.apiVersion ?? status.api_version ?? "2.0.0";
+  if (typeof transaction.sign !== "function") {
+    throw new Error("Transaction object has no sign() method");
+  }
+  transaction.sign(privateKey);
 
-    let transaction: any;
-    if (typeof sdk.makeCsprTransferTransaction === "function") {
-      transaction = sdk.makeCsprTransferTransaction({
-        senderPublicKeyHex: senderHex.replace(/^0x/, ""),
-        recipientPublicKeyHex: recipientHex.replace(/^0x/, ""),
-        transferAmount: amount,
-        chainName: config.networkName,
-        casperNetworkApiVersion: apiVersion,
-        paymentAmount: payment,
-        memo: Date.now() % 1_000_000_000,
-      });
-    } else {
-      const builder = new sdk.NativeTransferBuilder()
-        .from(sdk.PublicKey.fromHex(senderHex.replace(/^0x/, "")))
-        .target(sdk.PublicKey.fromHex(recipientHex.replace(/^0x/, "")))
-        .amount(amount)
-        .chainName(config.networkName)
-        .payment(Number(payment), 1);
-      transaction = builder.build();
-    }
+  const putResult = await client.putTransaction(transaction);
+  const txHash = extractTxHash(transaction, putResult);
 
-    // Sign
-    if (typeof transaction.sign === "function") {
-      transaction.sign(privateKey);
-    } else if (typeof transaction.setSignature === "function") {
-      const bytes =
-        transaction.hash?.toBytes?.() ??
-        transaction.getHash?.()?.toBytes?.() ??
-        transaction.hash;
-      const sig = privateKey.signAndAddAlgorithmBytes
-        ? privateKey.signAndAddAlgorithmBytes(bytes)
-        : privateKey.sign(bytes);
-      transaction.setSignature(sig, privateKey.publicKey);
-    } else {
-      throw new Error("Unable to sign Casper transaction with this SDK build");
-    }
-
-    const result = await client.putTransaction(transaction);
-    const txHash =
-      result.transactionHash?.toHex?.() ??
-      result.transaction_hash?.Deploy ??
-      result.transaction_hash?.Version1 ??
-      result.hash ??
-      JSON.stringify(result);
-
-    return {
-      mode: "casper-testnet",
-      txHash: String(txHash),
-      deployHash: String(txHash),
-      note: `Live Casper ${config.networkName} transfer submitted via putTransaction`,
-    };
+  return {
+    mode: "casper-testnet",
+    txHash,
+    deployHash: txHash,
+    note: `Live Casper ${config.networkName} transfer via putTransaction`,
   };
+}
+
+/**
+ * Factory used by agents: each call submits a new live transfer.
+ */
+export async function createLiveCasperAnchor(
+  config: CasperLiveConfig,
+): Promise<() => Promise<AnchorResult>> {
+  // Connectivity check once
+  await proveCasperRpc(config.rpcUrl);
+  return async () => submitLiveTransfer(config);
 }
 
 export function makeOfflineProof(label: string): AnchorResult {

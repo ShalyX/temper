@@ -110,8 +110,19 @@ Copy `.env.example` to `.env` if you need live Casper settings. Never commit key
 |----------|---------|
 | `PORT` | HTTP port (default 4173) |
 | `TEMPER_MODE` | `local` (default) |
-| `CASPER_SECRET_KEY_PATH` | PEM path for Testnet anchoring |
+| `CASPER_SECRET_KEY_PATH` | PEM path for Testnet transfers |
 | `CASPER_RPC_URL` | default Casper Testnet RPC |
+
+Live transfer requires a **funded** Testnet account. See [`SUBMISSION/FUNDING.md`](SUBMISSION/FUNDING.md).
+
+```bash
+export CASPER_SECRET_KEY_PATH=/path/to/secret_key.pem
+npm run temper -- status
+npm run temper -- transfer
+npm run temper -- run stale-quote --live
+```
+
+Until the account is funded, the node correctly rejects submits with `no such addressable entity`.
 
 ## What’s next
 

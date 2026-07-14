@@ -1,4 +1,5 @@
 async function api(path, options) {
+  // Prefer same-origin /api routes (Vercel + local). Local Node server also serves /api/*
   const res = await fetch(path, {
     headers: { "content-type": "application/json" },
     ...options,
