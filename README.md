@@ -55,6 +55,20 @@ Scenario: stale-quote
   → Both outcomes recorded in the result registry
 ```
 
+## Live demo
+
+- **App:** https://temper-one.vercel.app
+- **Health:** https://temper-one.vercel.app/api/health
+- **Casper RPC probe:** https://temper-one.vercel.app/api/casper/status
+- **Repo:** https://github.com/ShalyX/temper
+
+```bash
+curl -s https://temper-one.vercel.app/api/health
+curl -s -X POST https://temper-one.vercel.app/api/run \
+  -H 'content-type: application/json' \
+  -d '{"scenarioId":"stale-quote"}'
+```
+
 ## Quick start
 
 ```bash
