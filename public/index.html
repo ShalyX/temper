@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Temper — Casper agent reliability harness</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="top">
+        <div>
+          <p class="eyebrow">Casper Agentic Buildathon · Final Round</p>
+          <h1>Temper</h1>
+          <p class="lede">
+            Reliability testing for autonomous Casper agents. Inject x402 and data faults.
+            Compare a naive agent against a policy-guarded agent. Record the outcome.
+          </p>
+        </div>
+        <div class="status" id="statusBox">
+          <span class="dot"></span>
+          <span id="statusText">checking…</span>
+        </div>
+      </header>
+
+      <section class="sponsor">
+        <h2>Sponsor integration</h2>
+        <p>
+          Temper exercises the Casper agent stack at the failure boundary:
+          <strong>x402 paid data → policy check → transaction decision</strong>.
+          The demo path uses an honest local x402 challenge/response shape. Live Casper
+          Testnet anchoring is optional when a funded key is configured.
+        </p>
+      </section>
+
+      <section class="controls">
+        <label>
+          Scenario
+          <select id="scenario">
+            <option value="stale-quote">stale-quote — first paid response is stale</option>
+            <option value="malformed-payload">malformed-payload — paid junk data</option>
+          </select>
+        </label>
+        <button id="runBtn" type="button">Run dual comparison</button>
+      </section>
+
+      <section class="grid" id="results" hidden>
+        <article class="card fail" id="naiveCard">
+          <h3>Naive agent</h3>
+          <p class="badge" id="naiveBadge">—</p>
+          <pre id="naiveBody"></pre>
+        </article>
+        <article class="card pass" id="guardedCard">
+          <h3>Guarded agent</h3>
+          <p class="badge" id="guardedBadge">—</p>
+          <pre id="guardedBody"></pre>
+        </article>
+      </section>
+
+      <section class="summary" id="summary" hidden>
+        <h2>Comparison</h2>
+        <p id="summaryText"></p>
+        <pre id="summaryMeta"></pre>
+      </section>
+
+      <section class="how">
+        <h2>Demo loop (under 2 minutes)</h2>
+        <ol>
+          <li>Click <em>Run dual comparison</em> on <code>stale-quote</code>.</li>
+          <li>Watch the naive agent pay once and execute on stale data → <strong>FAIL</strong>.</li>
+          <li>Watch the guarded agent reject stale data, retry, get a fresh quote → <strong>PASS</strong>.</li>
+          <li>Inspect recovery path, payment attempts, and result anchors.</li>
+        </ol>
+      </section>
+
+      <footer>
+        <p>
+          Modes are labeled honestly. Local x402 responses are simulated payment authorizations
+          unless a live facilitator and funded Casper key are configured.
+        </p>
+      </footer>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>

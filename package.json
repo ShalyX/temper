@@ -1,0 +1,30 @@
+{
+  "name": "temper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Temper — reliability testing harness for autonomous Casper agents",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx src/server/index.ts",
+    "start": "node dist/server/index.js",
+    "temper": "tsx src/cli.ts",
+    "demo": "tsx src/cli.ts run stale-quote --dual",
+    "prove:rpc": "tsx scripts/prove-rpc.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "casper-js-sdk": "^5.0.12"
+  }
+}
